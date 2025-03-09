@@ -1,0 +1,44 @@
+[
+  {
+    "httpRequest": {
+      "path": "/payment-terminal-service/terminals/terminal-1/authorize"
+    },
+    "httpResponse": {
+      "body": {
+        "result": "accepted",
+        "paymentId": "payment-1"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "path": "/payment-terminal-service/terminals/terminal-1/payments/payment-1/capture"
+    },
+    "httpResponse": {
+      "body": {
+        "result": "accepted"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "path": "/charge-point-service/charge-point-1/start"
+    },
+    "httpResponse": {
+      "body": {
+        "result": "accepted",
+        "sessionId": "session-1"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "path": "/charge-point-service/charge-point-1/sessions/session-1/stop"
+    },
+    "httpResponse": {
+      "body": {
+        "result": "accepted"
+      }
+    }
+  }
+]
