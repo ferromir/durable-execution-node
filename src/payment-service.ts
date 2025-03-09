@@ -1,45 +1,38 @@
-import { v4 as uuidv4 } from "uuid";
-
-export interface CardRead {
-  terminalId: string;
-  cardHash: string;
-}
-
 export interface Payment {
   id: string;
   status: "refused" | "authorized" | "captured" | "cancelled";
+  paymentToken: string;
   authorizedAmount: number;
   finalAmount: number;
   currency: string;
-  terminalId: string;
-  cardHash: string;
 }
 
-export class PaymentTerminalService {
-  baseUrl: string;
+export class PaymentService {
   payments: Map<string, Payment>;
+  counter: number;
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+  constructor() {
     this.payments = new Map();
+    this.counter = 0;
   }
 
   authorize(
-    terminalId: string,
+    paymentToken: string,
     amount: number,
     currency: string,
-    cardHash: string,
   ): Promise<Payment> {
-    const status = terminalId === "terminal-1" ? "authorized" : "refused";
+    const status =
+      paymentToken === "payment-token-1" ? "authorized" : "refused";
+
+    this.counter++;
 
     const payment: Payment = {
-      id: uuidv4(),
+      id: `payment-${this.counter}`,
       status,
+      paymentToken,
       authorizedAmount: amount,
       finalAmount: 0,
       currency,
-      terminalId,
-      cardHash,
     };
 
     this.payments.set(payment.id, payment);
@@ -47,24 +40,14 @@ export class PaymentTerminalService {
   }
 
   capture(id: string, amount: number): Promise<Payment> {
-    const payment = this.payments.get(id);
-
-    if (!payment) {
-      throw new Error("payment not found");
-    }
-
+    const payment = this.payments.get(id)!;
     payment.finalAmount = amount;
     payment.status = "captured";
     return Promise.resolve(payment);
   }
 
   cancel(id: string): Promise<Payment> {
-    const payment = this.payments.get(id);
-
-    if (!payment) {
-      throw new Error("payment not found");
-    }
-
+    const payment = this.payments.get(id)!;
     payment.status = "cancelled";
     return Promise.resolve(payment);
   }

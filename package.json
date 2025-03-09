@@ -4,16 +4,16 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node --experimental-strip-types --watch ./src/index.ts",
+    "start": "node --experimental-strip-types ./src/index.ts",
     "format": "npx prettier . --write"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "uuid": "^11.1.0"
+    "sleep-promise": "^9.1.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
