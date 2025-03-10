@@ -1,3 +1,5 @@
+import * as fs from "fs";
+
 export interface ChargeSession {
   id: string;
   status: "started" | "stopped" | "failed";
@@ -8,14 +10,23 @@ export interface ChargeSession {
 }
 
 export class ChargingService {
-  chargeSessions: Map<string, ChargeSession>;
   counter: number;
   tariff: number;
+  chargeSessions: Array<ChargeSession>;
 
   constructor() {
-    this.chargeSessions = new Map();
     this.counter = 0;
     this.tariff = 0.5;
+
+    try {
+      const data = fs.readFileSync("charge-sessions.json", {
+        encoding: "utf-8",
+      });
+      this.chargeSessions = JSON.parse(data) as Array<ChargeSession>;
+    } catch {
+      fs.writeFileSync("charge-sessions.json", "[]", { encoding: "utf-8" });
+      this.chargeSessions = new Array();
+    }
   }
 
   start(chargePointId: string): Promise<ChargeSession> {
@@ -31,20 +42,47 @@ export class ChargingService {
       currency: "EUR",
     };
 
-    this.chargeSessions.set(chargeSession.id, chargeSession);
+    this.chargeSessions.push(chargeSession);
+
+    fs.writeFileSync(
+      "charge-sessions.json",
+      JSON.stringify(this.chargeSessions, null, 2),
+      {
+        encoding: "utf-8",
+      },
+    );
+
     return Promise.resolve(chargeSession);
   }
 
   find(id: string): Promise<ChargeSession> {
-    const chargeSession = this.chargeSessions.get(id)!;
+    const chargeSession = this.chargeSessions.find((p) => p.id === id)!;
     chargeSession.kwh += 1;
     chargeSession.cost = chargeSession.kwh * this.tariff;
+
+    fs.writeFileSync(
+      "charge-sessions.json",
+      JSON.stringify(this.chargeSessions, null, 2),
+      {
+        encoding: "utf-8",
+      },
+    );
+
     return Promise.resolve(chargeSession);
   }
 
   stop(id: string): Promise<ChargeSession> {
-    const chargeSession = this.chargeSessions.get(id)!;
+    const chargeSession = this.chargeSessions.find((p) => p.id === id)!;
     chargeSession.status = "stopped";
+
+    fs.writeFileSync(
+      "charge-sessions.json",
+      JSON.stringify(this.chargeSessions, null, 2),
+      {
+        encoding: "utf-8",
+      },
+    );
+
     return Promise.resolve(chargeSession);
   }
 }

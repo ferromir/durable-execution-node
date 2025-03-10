@@ -75,6 +75,8 @@ export class AdhocService {
       adhocSession.id,
       payment,
     );
+
+    console.log("start finished", JSON.stringify(adhocSession, null, 2));
   }
 
   async stop(id: string): Promise<void> {
@@ -98,5 +100,7 @@ export class AdhocService {
       adhocSession.id,
       payment,
     );
+
+    console.log("stop finished", JSON.stringify(adhocSession, null, 2));
   }
 }
