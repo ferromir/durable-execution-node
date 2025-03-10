@@ -1,52 +1,27 @@
 import express from "express";
-import { ChargingService } from "./charging-service.ts";
-import { PaymentService } from "./payment-service.ts";
 import { z } from "zod";
-import { AdhocService } from "./adhoc-service.ts";
-import { AdhocSessionRepo } from "./adhoc-session-repo.ts";
+import { BikeService } from "./bike-service.ts";
+import { PaymentService } from "./payment-service.ts";
+import { SessionService } from "./session-service.ts";
 
 const app = express();
 app.use(express.json());
 
 const port = 3000;
-const chargingService = new ChargingService();
+const bikeService = new BikeService();
 const paymentService = new PaymentService();
-const adhocSessionRepo = new AdhocSessionRepo();
-
-const adhocService = new AdhocService(
-  chargingService,
-  paymentService,
-  adhocSessionRepo,
-);
+const sessionService = new SessionService(bikeService, paymentService);
 
 const startSchema = z.object({
-  chargePointId: z.string(),
+  bikeId: z.string(),
   paymentToken: z.string(),
 });
 
-app.post("/adhoc-sessions", async (req, res) => {
+app.post("/start", async (req, res) => {
   const payload = startSchema.parse(req.body);
-  const { chargePointId, paymentToken } = payload;
-
-  const adhocSession = await adhocSessionRepo.create(
-    chargePointId,
-    paymentToken,
-  );
-
-  adhocService.start(adhocSession);
-  res.send(adhocSession);
-});
-
-app.post("/adhoc-sessions/:id/stop", async (req, res) => {
-  const id = req.params.id;
-  adhocService.stop(id);
+  const { bikeId, paymentToken } = payload;
+  sessionService.start(bikeId, paymentToken);
   res.send();
-});
-
-app.get("/adhoc-sessions/:id", async (req, res) => {
-  const id = req.params.id;
-  const adhocSession = await adhocSessionRepo.find(id);
-  res.send(adhocSession);
 });
 
 app.listen(port, () => {

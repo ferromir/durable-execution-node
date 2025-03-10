@@ -1,78 +1,73 @@
-import * as fs from "fs";
+import { v4 as uuidv4 } from "uuid";
 
-export interface Payment {
+interface Payment {
   id: string;
-  status: "refused" | "authorized" | "captured" | "cancelled";
-  paymentToken: string;
-  authorizedAmount: number;
-  finalAmount: number;
-  currency: string;
+  result: "authorized" | "rejected";
 }
 
 export class PaymentService {
-  counter: number;
-  payments: Array<Payment>;
-
-  constructor() {
-    this.counter = 0;
-
-    try {
-      const data = fs.readFileSync("payments.json", { encoding: "utf-8" });
-      this.payments = JSON.parse(data) as Array<Payment>;
-    } catch {
-      fs.writeFileSync("payments.json", "[]", { encoding: "utf-8" });
-      this.payments = new Array();
-    }
-  }
-
   authorize(
     paymentToken: string,
     amount: number,
     currency: string,
   ): Promise<Payment> {
-    const status =
-      paymentToken === "payment-token-1" ? "authorized" : "refused";
+    const result =
+      paymentToken === "payment-token-1" ? "authorized" : "rejected";
 
-    this.counter++;
-
-    const payment: Payment = {
-      id: `payment-${this.counter}`,
-      status,
-      paymentToken,
-      authorizedAmount: amount,
-      finalAmount: 0,
-      currency,
-    };
-
-    this.payments.push(payment);
-
-    fs.writeFileSync("payments.json", JSON.stringify(this.payments, null, 2), {
-      encoding: "utf-8",
+    return Promise.resolve({
+      id: uuidv4(),
+      result,
     });
-
-    return Promise.resolve(payment);
   }
 
-  capture(id: string, amount: number): Promise<Payment> {
-    const payment = this.payments.find((p) => p.id === id)!;
-    payment.finalAmount = amount;
-    payment.status = "captured";
-
-    fs.writeFileSync("payments.json", JSON.stringify(this.payments, null, 2), {
-      encoding: "utf-8",
-    });
-
-    return Promise.resolve(payment);
+  capture(id: string, amount: number): Promise<void> {
+    return Promise.resolve();
   }
 
-  cancel(id: string): Promise<Payment> {
-    const payment = this.payments.find((p) => p.id === id)!;
-    payment.status = "cancelled";
-
-    fs.writeFileSync("payments.json", JSON.stringify(this.payments, null, 2), {
-      encoding: "utf-8",
-    });
-
-    return Promise.resolve(payment);
+  cancel(id: string): Promise<void> {
+    return Promise.resolve();
   }
 }
+
+// export interface Payment {
+//   id: string;
+//   status: "failed" | "authorized" | "captured" | "cancelled";
+//   paymentToken: string;
+//   authorizedAmount: number;
+//   finalAmount: number;
+//   currency: string;
+// }
+
+// export class PaymentService {
+//   constructor() {}
+
+//   authorize(
+//     paymentToken: string,
+//     amount: number,
+//     currency: string,
+//   ): Promise<Payment> {
+//     const status = paymentToken === "payment-token-1" ? "authorized" : "failed";
+
+//     const payment: Payment = {
+//       id: uuidv4(),
+//       status,
+//       paymentToken,
+//       authorizedAmount: amount,
+//       finalAmount: 0,
+//       currency,
+//     };
+
+//     return Promise.resolve(payment);
+//   }
+
+//   capture(payment: Payment, amount: number): Promise<Payment> {
+//     payment.finalAmount = amount;
+//     payment.status = "captured";
+//     return Promise.resolve(payment);
+//   }
+
+//   cancel(payment: Payment): Promise<Payment> {
+//     payment.status = "cancelled";
+//     return Promise.resolve(payment);
+//   }
+// }
