@@ -1,83 +1,72 @@
 ```mermaid
 sequenceDiagram
-  ui ->> journey-svc: start journey
-  journey-svc ->> db: create journey
-  db ->> journey-svc: ok
-  journey-svc ->> ui: journey
-
-  journey-svc ->> payment-svc: authorize payment
-  payment-svc ->> journey-svc: payment (failed)
-
-  journey-svc ->> db: update journey
-  db ->> journey-svc: ok
-```
-
-```mermaid
-sequenceDiagram
-  ui ->> journey-svc: start journey
-  journey-svc ->> db: create journey
-  db ->> journey-svc: ok
-  journey-svc ->> ui: journey
-
-  journey-svc ->> payment-svc: authorize payment
-  payment-svc ->> journey-svc: payment (accepted)
-
-  journey-svc ->> db: update journey
-  db ->> journey-svc: ok
-
-  journey-svc ->> charging-svc: start session
-  charging-svc ->> journey-svc: session (failed)
-
-  journey-svc ->> db: update journey
-  db ->> journey-svc: ok
-
-  journey-svc ->> payment-svc: cancel payment
-  payment-svc ->> journey-svc: payment (cancelled)
-
-  journey-svc ->> db: update journey
-  db ->> journey-svc: ok
-```
-
-```mermaid
-sequenceDiagram
-  ui ->> journey-svc: start journey
-  journey-svc ->> db: create journey
-  db ->> journey-svc: ok
-  journey-svc ->> ui: journey
-
-  journey-svc ->> payment-svc: authorize payment
-  payment-svc ->> journey-svc: payment (accepted)
-
-  journey-svc ->> db: update journey
-  db ->> journey-svc: ok
-
-  journey-svc ->> charging-svc: start session
-  charging-svc ->> journey-svc: session (started)
-
-  journey-svc ->> db: update journey
-  db ->> journey-svc: ok
-```
-
-```mermaid
-sequenceDiagram
   terminal ->> app: card read
-  app ->> psp: authorize payment
-  app ->> bike: unlock bike
-  app ->> app: sleep 1h
-  app ->> bike: lock bike
-  app ->> psp: capture payment
-```
+  activate app
+  app ->> terminal: ok
 
-```mermaid
-sequenceDiagram
-  terminal ->> app: card read
-  app ->> psp: authorize payment
-  app ->> bike: unlock bike (fails)
-  app ->> psp: cancel payment
-```
+  note over app: Start of workflow
 
-```mermaid
-sequenceDiagram
-  terminal ->> app: card read
-  app ->> psp: authorize payment (fails)
+  app ->> bike: get tariff
+  activate bike
+  bike ->> app: tariff
+  deactivate bike
+
+  alt happy path
+
+    app ->> psp: authorize payment
+    activate psp
+    psp ->> app: success
+    deactivate psp
+
+    app ->> bike: unlock bike
+    activate bike
+    bike ->> app: success
+    deactivate bike
+
+    app ->> app: sleep 1h
+
+    app ->> bike: get usage
+    activate bike
+    bike ->> app: usage
+    deactivate bike
+
+    app ->> bike: lock bike
+    activate bike
+    bike ->> app: success
+    deactivate bike
+
+    app ->> psp: capture payment
+    activate psp
+    psp ->> app: success
+    deactivate psp
+
+  else authorization fails
+
+    app ->> psp: authorize payment
+    activate psp
+    psp ->> app: failure
+    deactivate psp
+
+  else unlock fails
+
+    app ->> psp: authorize payment
+    activate psp
+    psp ->> app: success
+    deactivate psp
+
+    app ->> bike: unlock bike
+    activate bike
+    bike ->> app: fails
+    deactivate bike
+
+    app ->> psp: cancel payment
+    activate psp
+    psp ->> app: success
+    deactivate psp
+
+  end
+
+  note over app: End of workflow
+
+  deactivate app
 ```
