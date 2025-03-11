@@ -32,6 +32,8 @@ export class SessionService {
     if (result === "failure") {
       console.log("canceling payment...");
       await this.paymentService.cancel(payment.id);
+
+      console.log("done!");
       return;
     }
 
@@ -44,7 +46,10 @@ export class SessionService {
     await this.bikeService.lock(bikeId);
 
     const captureAmount = usage * tariff.amount;
+
     console.log("capturing payment...");
     await this.paymentService.capture(payment.id, captureAmount);
+
+    console.log("done!");
   }
 }
