@@ -1,8 +1,11 @@
 ```mermaid
 sequenceDiagram
+
+  activate terminal
   terminal ->> app: card read
   activate app
   app ->> terminal: ok
+  deactivate terminal
 
   note over app: Start of workflow
 
