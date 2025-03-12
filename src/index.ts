@@ -1,26 +1,24 @@
 import express from "express";
-import { z } from "zod";
-import { BikeService } from "./bike-service.ts";
 import { PaymentService } from "./payment-service.ts";
-import { SessionService } from "./session-service.ts";
+import { AccountService } from "./account-service.ts";
+import { InvoiceService } from "./invoice-service.ts";
+import { WorkflowService } from "./workflow-service.ts";
 
 const app = express();
 app.use(express.json());
-
 const port = 3000;
-const bikeService = new BikeService();
+const accountService = new AccountService();
+const invoiceService = new InvoiceService();
 const paymentService = new PaymentService();
-const sessionService = new SessionService(bikeService, paymentService);
 
-const startSchema = z.object({
-  bikeId: z.string(),
-  paymentToken: z.string(),
-});
+const workflowService = new WorkflowService(
+  accountService,
+  invoiceService,
+  paymentService,
+);
 
-app.post("/start", async (req, res) => {
-  const payload = startSchema.parse(req.body);
-  const { bikeId, paymentToken } = payload;
-  sessionService.start(bikeId, paymentToken);
+app.post("/invoices/:invoiceId/collect", async (req, res) => {
+  workflowService.collectPayment(req.params.invoiceId);
   res.send();
 });
 
