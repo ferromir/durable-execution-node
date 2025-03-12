@@ -56,7 +56,7 @@ export class WorkflowService {
       await sleep(10000);
     }
 
-    console.log("account blocked", invoiceId);
     await this.accountService.block(account.id);
+    console.log("account blocked", invoiceId);
   }
 }
