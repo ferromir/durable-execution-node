@@ -41,7 +41,10 @@ export class WorkflowService {
     }
 
     for (let i = 0; i < 3; i++) {
-      const success = await this.paymentService.capture(account.paymentToken);
+      const success = await this.paymentService.capture(
+        account.paymentToken,
+        invoice.amount,
+      );
 
       if (success) {
         await this.invoiceService.markAsPaid(invoice.id);
