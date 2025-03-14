@@ -99,6 +99,7 @@ export class Worker {
    * It creates a workflow in the database.
    * @param type The type of the workflow
    * @param key The id of the workflow
+   * @param input The input of the workflow
    */
   create<T>(type: string, key: string, input: unknown): Promise<void> {
     throw new Error("todo");
