@@ -4,6 +4,7 @@ export interface Workflow {
   type: string;
   key: string;
   status: "available" | "processing" | "failed" | "finished" | "aborted";
+  createdAt: Date;
   failures?: number;
   error?: string;
   timeoutAt?: Date;
@@ -17,15 +18,15 @@ export interface Step {
   workflowKey: string;
   key: string;
   output: unknown;
-  executedAt: Date;
+  createdAt: Date;
 }
 
 export interface Sleep {
   workflowType: string;
   workflowKey: string;
   key: string;
-  startAt: Date;
   wakeUpAt: Date;
+  createdAt: Date;
 }
 
 export class WorkflowContext {
@@ -122,9 +123,10 @@ export class Worker {
   /**
    * It picks a ready-to-run workflow from the database.
    * A workflow is ready-to-run if one of these conditions is true:
-   * status=available
-   * status=processing AND NOW>timeoutAt
-   * status=failed AND failures<MAX_FAILURES AND NOW>resumeAt
+   *  status=available
+   *  status=processing AND NOW>timeoutAt
+   *  status=failed AND failures<MAX_FAILURES AND NOW>resumeAt
+   * From these, the oldest one should be selected.
    */
   pick(): Promise<Workflow | undefined> {
     throw new Error("todo");
