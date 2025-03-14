@@ -4,6 +4,7 @@ export interface Workflow {
   type: string;
   key: string;
   status: "available" | "processing" | "failed" | "finished" | "aborted";
+  input: unknown;
   createdAt: Date;
   failures?: number;
   error?: string;
