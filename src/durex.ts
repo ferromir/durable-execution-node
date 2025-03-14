@@ -100,7 +100,7 @@ export class Worker {
    * @param type The type of the workflow
    * @param key The id of the workflow
    */
-  create<T>(type: string, key: string): Promise<void> {
+  create<T>(type: string, key: string, input: unknown): Promise<void> {
     throw new Error("todo");
   }
 
