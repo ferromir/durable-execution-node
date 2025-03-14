@@ -18,10 +18,14 @@ export class WorkflowService {
     this.paymentService = paymentService;
   }
 
-  async collectPayment(invoiceId: string): Promise<void> {
-    console.log("collecting invoice...", invoiceId);
+  async collectPayment(wc: any, invoiceId: string): Promise<void> {
+    console.log("collecting payment for invoice...", invoiceId);
 
-    const invoice = await this.invoiceService.find(invoiceId);
+    const invoice = await wc.step("find-invoice", async () => {
+      return await this.invoiceService.find(invoiceId);
+    });
+
+    // const invoice = await this.invoiceService.find(invoiceId);
 
     if (!invoice) {
       console.log("invoice not found", invoiceId);
@@ -53,7 +57,9 @@ export class WorkflowService {
       }
 
       console.log("capture failed, retry after pause...", invoiceId);
-      await sleep(10000);
+      // await sleep(10000);
+
+      await wc.sleep(`sleep-${i}`, 10_000);
     }
 
     await this.accountService.block(account.id);
