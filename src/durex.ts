@@ -1,10 +1,12 @@
+import { Collection, Db, MongoClient } from "mongodb";
+
 export type WorkflowFn = (wc: WorkflowContext, input: unknown) => Promise<void>;
 
 export interface Workflow {
   type: string;
   key: string;
-  status: "available" | "processing" | "failed" | "finished" | "aborted";
   input: unknown;
+  status: "available" | "processing" | "failed" | "finished" | "aborted";
   createdAt: Date;
   failures?: number;
   error?: string;
@@ -90,9 +92,23 @@ export class WorkflowContext {
 
 export class Worker {
   now: () => Date;
+  initialized: boolean;
+  client: MongoClient;
+  db: Db;
+  workflows: Collection;
+  steps: Collection;
+  sleeps: Collection;
+  registry: Map<string, WorkflowFn>;
 
-  constructor(now: () => Date) {
+  constructor(now: () => Date, mongoUrl: string) {
     this.now = now;
+    this.initialized = false;
+    this.client = new MongoClient(mongoUrl);
+    this.db = this.client.db();
+    this.workflows = this.db.collection("workflows");
+    this.steps = this.db.collection("steps");
+    this.sleeps = this.db.collection("sleeps");
+    this.registry = new Map();
   }
 
   /**
@@ -101,16 +117,54 @@ export class Worker {
    * @param key The id of the workflow
    * @param input The input of the workflow
    */
-  create<T>(type: string, key: string, input: unknown): Promise<void> {
-    throw new Error("todo");
+  async create<T>(type: string, key: string, input: unknown): Promise<void> {
+    if (!this.initialized) {
+      throw new Error("not initialized");
+    }
+
+    const workflow: Workflow = {
+      type,
+      key,
+      input,
+      status: "available",
+      createdAt: this.now(),
+    };
+
+    await this.workflows.insertOne(workflow);
   }
 
   /**
    * It executes the function for the workflow.
-   * @param type The type of the workflow
+   * @param workflow The workflow
    * @param key The id of the workflow
    */
-  run<T>(type: string, key: string): Promise<void> {
+  async run<T>(workflow: Workflow): Promise<void> {
+    if (!this.initialized) {
+      throw new Error("not initialized");
+    }
+
+    const fn = this.registry.get(workflow.type);
+
+    if (!fn) {
+      throw new Error(`no registered function for type ${workflow.type}`);
+    }
+
+    let now = this.now();
+    const timeoutAt = new Date(now.getTime() + 300_000); // 5m
+    const filter = { type: workflow.type, key: workflow.key };
+    let update = { status: "processing", timeoutAt };
+    await this.workflows.updateOne(filter, update);
+    const wc = new WorkflowContext(workflow.type, workflow.key, this.now);
+
+    try {
+      await fn(wc, workflow.input);
+    } catch (err) {
+      const failure = JSON.stringify(err);
+
+      now = this.now();
+      const resumeAt = new Date(now.getTime() + 300_000); // 5m
+    }
+
     throw new Error("todo");
   }
 
