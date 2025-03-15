@@ -1,4 +1,5 @@
 import { Collection, Db, MongoClient, ReturnDocument } from "mongodb";
+import sleep from "sleep-promise";
 
 export type WorkflowStatus =
   | "idle"
@@ -20,58 +21,60 @@ export interface Workflow {
   error?: string;
 }
 
-export interface Step {
+export interface Action {
   id: string;
   workflowId: string;
   output: unknown;
   createdAt: Date;
 }
 
-export interface Timeout {
-  createdAt: Date;
+// export class WorkflowContext {
+//   id: string;
+//   now: () => Date;
+
+//   constructor(id: string, now: () => Date) {
+//     this.id;
+//     this.now = now;
+//   }
+
+//   step<T>(id: string, fn: () => Promise<T>): Promise<T> {
+//     throw new Error("todo");
+//   }
+
+//   sleep(id: string, ms: number): Promise<void> {
+//     throw new Error("todo");
+//   }
+// }
+
+export interface WorkflowContext {
+  input: unknown;
+  act<T>(id: string, fn: () => Promise<T>): Promise<T>;
+  sleep(id: string, ms: number): Promise<void>;
 }
 
-export class WorkflowContext {
-  id: string;
-  now: () => Date;
-
-  constructor(id: string, now: () => Date) {
-    this.id;
-    this.now = now;
-  }
-
-  step<T>(id: string, fn: () => Promise<T>): Promise<T> {
-    throw new Error("todo");
-  }
-
-  sleep(id: string, ms: number): Promise<void> {
-    throw new Error("todo");
-  }
-}
-
-export type WorkflowFn = (wc: WorkflowContext, input: unknown) => Promise<void>;
+export type WorkflowFn = (wc: WorkflowContext) => Promise<void>;
 
 export class Worker {
   now: () => Date;
   client: MongoClient;
   db: Db;
   workflows: Collection<Workflow>;
-  steps: Collection<Step>;
-  timeouts: Collection<Timeout>;
+  actions: Collection<Action>;
   functions: Map<string, WorkflowFn>;
   waitMs: number;
   maxFailures: number;
+  claimIntervalMs: number;
 
   constructor(mongoUrl: string, now: () => Date) {
     this.now = now;
     this.client = new MongoClient(mongoUrl);
     this.db = this.client.db("durex");
     this.workflows = this.db.collection("workflows");
-    this.steps = this.db.collection("steps");
-    this.timeouts = this.db.collection("timeouts");
+    this.actions = this.db.collection("actions");
     this.functions = new Map();
     this.waitMs = 10_000;
     this.maxFailures = 3;
+    this.claimIntervalMs = 1_000;
   }
 
   async create(
@@ -93,28 +96,28 @@ export class Worker {
   }
 
   async init(functions: Map<string, WorkflowFn>): Promise<void> {
-    console.log("initializing worker...");
     this.functions = functions;
-
     this.workflows.createIndex({ id: 1 }, { unique: true });
     this.workflows.createIndex({ status: 1 });
     this.workflows.createIndex({ status: 1, timeoutAt: 1 });
     this.workflows.createIndex({ status: 1, timeoutAt: 1, failures: 1 });
-    this.steps.createIndex({ id: 1, workflowId: 1 }, { unique: true });
+    this.actions.createIndex({ id: 1, workflowId: 1 }, { unique: true });
 
-    this.client = await this.client.connect();
-    const changeStream = this.workflows.watch();
+    while (true) {
+      const workflow = await this.claim();
 
-    for await (const _change of changeStream) {
-      await this.claim();
+      if (workflow) {
+        console.log("workflow claimed:");
+        console.log(JSON.stringify(workflow, null, 2));
+        console.log("\n");
+        this.run(workflow);
+      } else {
+        await sleep(this.claimIntervalMs);
+      }
     }
-
-    await changeStream.close();
-    await this.client.close();
   }
 
-  async claim(): Promise<void> {
-    console.log("claiming workflow...");
+  async claim(): Promise<Workflow | null> {
     const now = this.now();
     const timeoutAt = new Date(now.getTime() + this.waitMs);
 
@@ -142,22 +145,42 @@ export class Worker {
       },
     };
 
-    const workflow = await this.workflows.findOneAndUpdate(filter, update, {
-      returnDocument: ReturnDocument.AFTER,
-    });
-
-    if (!workflow) {
-      return;
-    }
-
-    console.log(JSON.stringify(workflow, null, 2) + `\n ${this.now()}`);
-
-    const timeout: Timeout = { createdAt: now };
-    await this.timeouts.insertOne(timeout);
+    const workflow = await this.workflows.findOneAndUpdate(filter, update);
+    return workflow;
   }
 
   async run(workflow: Workflow): Promise<void> {
-    console.log("running workflow...");
-    throw new Error("todo");
+    const act = async <T>(id: string, fn: () => Promise<T>) => {
+      const filter = { id, workflowId: workflow.id };
+      const existingAction = await this.actions.findOne(filter);
+
+      if (existingAction) {
+        return existingAction.output;
+      }
+
+      const output = await fn();
+
+      const newAction: Action = {
+        id,
+        workflowId: workflow.id,
+        output,
+        createdAt: this.now(),
+      };
+
+      await this.actions.insertOne(newAction);
+
+      if (!workflow.timeoutAt) {
+        return;
+      }
+
+      // Extend the timeout further since we just had a successful action.
+      const timeoutAt = new Date(workflow.timeoutAt.getTime() + this.waitMs);
+
+      await this.workflows.updateOne(
+        { id: workflow.id },
+        { $set: { timeoutAt } },
+      );
+    };
+    return Promise.resolve();
   }
 }

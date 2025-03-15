@@ -2,7 +2,7 @@ import sleep from "sleep-promise";
 import { AccountService } from "./account-service.ts";
 import { InvoiceService } from "./invoice-service.ts";
 import { PaymentService } from "./payment-service.ts";
-import { WorkflowContext } from "./durex.ts";
+import type { WorkflowContext } from "./durex.ts";
 
 export class WorkflowService {
   accountService: AccountService;

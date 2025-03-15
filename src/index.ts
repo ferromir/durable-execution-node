@@ -3,7 +3,8 @@ import { PaymentService } from "./payment-service.ts";
 import { AccountService } from "./account-service.ts";
 import { InvoiceService } from "./invoice-service.ts";
 import { WorkflowService } from "./workflow-service.ts";
-import { WorkflowContext, Worker } from "./durex.ts";
+import type { WorkflowContext } from "./durex.ts";
+import { Worker } from "./durex.ts";
 
 const app = express();
 app.use(express.json());
