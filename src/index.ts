@@ -22,6 +22,7 @@ const workflowService = new WorkflowService(
 const worker = new Worker(
   "mongodb://localhost:27017/?replicaSet=rs0&directConnection=true",
   () => new Date(),
+  new Map(),
 );
 
 app.post("/invoices/:invoiceId/collect", async (req, res) => {
@@ -38,4 +39,4 @@ app.listen(port, () => {
   console.log(`durex app listening on port ${port}`);
 });
 
-await worker.init(new Map());
+await worker.init();
