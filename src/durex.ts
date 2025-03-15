@@ -141,8 +141,7 @@ export class Worker {
       },
     };
 
-    const workflow = await this.workflows.findOneAndUpdate(filter, update);
-    return workflow;
+    return await this.workflows.findOneAndUpdate(filter, update);
   }
 
   private async run(workflow: Workflow): Promise<void> {
@@ -188,6 +187,12 @@ export class Worker {
         };
 
         await this.naps.insertOne(nap);
+
+        await this.workflows.updateOne(
+          { id: workflow.id },
+          { $set: { timeoutAt: nap.wakeUpAt } },
+        );
+
         await goSleep(ms);
         return;
       }
