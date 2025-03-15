@@ -3,6 +3,7 @@ import { PaymentService } from "./payment-service.ts";
 import { AccountService } from "./account-service.ts";
 import { InvoiceService } from "./invoice-service.ts";
 import { WorkflowService } from "./workflow-service.ts";
+import { WorkflowContext, Worker } from "./durex.ts";
 
 const app = express();
 app.use(express.json());
@@ -17,11 +18,23 @@ const workflowService = new WorkflowService(
   paymentService,
 );
 
+const worker = new Worker(
+  "mongodb://localhost:27017/?replicaSet=rs0&directConnection=true",
+  () => new Date(),
+);
+
 app.post("/invoices/:invoiceId/collect", async (req, res) => {
-  workflowService.collectPayment(req.params.invoiceId);
+  workflowService.collectPayment({} as WorkflowContext, req.params.invoiceId);
+  res.send();
+});
+
+app.post("/test", async (req, res) => {
+  await worker.create("workflow-1", "function-1", "invoice-1");
   res.send();
 });
 
 app.listen(port, () => {
   console.log(`durex app listening on port ${port}`);
 });
+
+await worker.init(new Map());

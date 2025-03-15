@@ -2,6 +2,7 @@ import sleep from "sleep-promise";
 import { AccountService } from "./account-service.ts";
 import { InvoiceService } from "./invoice-service.ts";
 import { PaymentService } from "./payment-service.ts";
+import { WorkflowContext } from "./durex.ts";
 
 export class WorkflowService {
   accountService: AccountService;
@@ -18,14 +19,12 @@ export class WorkflowService {
     this.paymentService = paymentService;
   }
 
-  async collectPayment(wc: any, invoiceId: string): Promise<void> {
+  async collectPayment(wc: WorkflowContext, invoiceId: string): Promise<void> {
     console.log("collecting payment for invoice...", invoiceId);
 
     const invoice = await wc.step("find-invoice", async () => {
       return await this.invoiceService.find(invoiceId);
     });
-
-    // const invoice = await this.invoiceService.find(invoiceId);
 
     if (!invoice) {
       console.log("invoice not found", invoiceId);
@@ -57,8 +56,6 @@ export class WorkflowService {
       }
 
       console.log("capture failed, retry after pause...", invoiceId);
-      // await sleep(10000);
-
       await wc.sleep(`sleep-${i}`, 10_000);
     }
 

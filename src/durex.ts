@@ -1,190 +1,163 @@
-import { Collection, Db, MongoClient } from "mongodb";
+import { Collection, Db, MongoClient, ReturnDocument } from "mongodb";
 
-export type WorkflowFn = (wc: WorkflowContext, input: unknown) => Promise<void>;
+export type WorkflowStatus =
+  | "idle"
+  | "running"
+  | "failed"
+  | "finished"
+  | "aborted";
 
 export interface Workflow {
-  type: string;
-  key: string;
+  id: string;
+  functionName: string;
   input: unknown;
-  status: "available" | "processing" | "failed" | "finished" | "aborted";
+  status: WorkflowStatus;
   createdAt: Date;
-  failures?: number;
-  error?: string;
   timeoutAt?: Date;
-  resumeAt?: Date;
   finishedAt?: Date;
   abortedAt?: Date;
+  failures?: number;
+  error?: string;
 }
 
 export interface Step {
-  workflowType: string;
-  workflowKey: string;
-  key: string;
+  id: string;
+  workflowId: string;
   output: unknown;
   createdAt: Date;
 }
 
-export interface Sleep {
-  workflowType: string;
-  workflowKey: string;
-  key: string;
-  wakeUpAt: Date;
+export interface Timeout {
   createdAt: Date;
 }
 
 export class WorkflowContext {
-  type: string;
-  key: string;
+  id: string;
   now: () => Date;
 
-  constructor(type: string, key: string, now: () => Date) {
-    this.type = type;
-    this.key = key;
+  constructor(id: string, now: () => Date) {
+    this.id;
     this.now = now;
   }
 
-  /**
-   * Creates a step record.
-   * @param key Key of the step
-   * @param fn Function to run
-   */
-  step<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  step<T>(id: string, fn: () => Promise<T>): Promise<T> {
     throw new Error("todo");
   }
 
-  /**
-   * Creates a sleep record.
-   * @param key Key of the sleep
-   * @param milliseconds Amount of milliseconds to sleep
-   */
-  sleep(key: string, milliseconds: number): Promise<void> {
-    throw new Error("todo");
-  }
-
-  /**
-   * Sets the status to processing.
-   */
-  processing(): Promise<void> {
-    throw new Error("todo");
-  }
-
-  /**
-   * Sets the status to failed.
-   */
-  failed(error: string): Promise<void> {
-    throw new Error("todo");
-  }
-
-  /**
-   * Sets the status to finished.
-   */
-  finished(): Promise<void> {
-    throw new Error("todo");
-  }
-
-  /**
-   * Sets the status to aborted.
-   */
-  aborted(): Promise<void> {
+  sleep(id: string, ms: number): Promise<void> {
     throw new Error("todo");
   }
 }
 
+export type WorkflowFn = (wc: WorkflowContext, input: unknown) => Promise<void>;
+
 export class Worker {
   now: () => Date;
-  initialized: boolean;
   client: MongoClient;
   db: Db;
-  workflows: Collection;
-  steps: Collection;
-  sleeps: Collection;
-  registry: Map<string, WorkflowFn>;
+  workflows: Collection<Workflow>;
+  steps: Collection<Step>;
+  timeouts: Collection<Timeout>;
+  functions: Map<string, WorkflowFn>;
+  waitMs: number;
+  maxFailures: number;
 
-  constructor(now: () => Date, mongoUrl: string) {
+  constructor(mongoUrl: string, now: () => Date) {
     this.now = now;
-    this.initialized = false;
     this.client = new MongoClient(mongoUrl);
-    this.db = this.client.db();
+    this.db = this.client.db("durex");
     this.workflows = this.db.collection("workflows");
     this.steps = this.db.collection("steps");
-    this.sleeps = this.db.collection("sleeps");
-    this.registry = new Map();
+    this.timeouts = this.db.collection("timeouts");
+    this.functions = new Map();
+    this.waitMs = 10_000;
+    this.maxFailures = 3;
   }
 
-  /**
-   * It creates a workflow in the database.
-   * @param type The type of the workflow
-   * @param key The id of the workflow
-   * @param input The input of the workflow
-   */
-  async create<T>(type: string, key: string, input: unknown): Promise<void> {
-    if (!this.initialized) {
-      throw new Error("not initialized");
-    }
+  async create(
+    id: string,
+    functionName: string,
+    input: unknown,
+  ): Promise<void> {
+    console.log("creating workflow...");
 
     const workflow: Workflow = {
-      type,
-      key,
+      id,
+      functionName,
       input,
-      status: "available",
+      status: "idle",
       createdAt: this.now(),
     };
 
     await this.workflows.insertOne(workflow);
   }
 
-  /**
-   * It executes the function for the workflow.
-   * @param workflow The workflow
-   * @param key The id of the workflow
-   */
-  async run<T>(workflow: Workflow): Promise<void> {
-    if (!this.initialized) {
-      throw new Error("not initialized");
+  async init(functions: Map<string, WorkflowFn>): Promise<void> {
+    console.log("initializing worker...");
+    this.functions = functions;
+
+    this.workflows.createIndex({ id: 1 }, { unique: true });
+    this.workflows.createIndex({ status: 1 });
+    this.workflows.createIndex({ status: 1, timeoutAt: 1 });
+    this.workflows.createIndex({ status: 1, timeoutAt: 1, failures: 1 });
+    this.steps.createIndex({ id: 1, workflowId: 1 }, { unique: true });
+
+    this.client = await this.client.connect();
+    const changeStream = this.workflows.watch();
+
+    for await (const _change of changeStream) {
+      await this.claim();
     }
 
-    const fn = this.registry.get(workflow.type);
-
-    if (!fn) {
-      throw new Error(`no registered function for type ${workflow.type}`);
-    }
-
-    let now = this.now();
-    const timeoutAt = new Date(now.getTime() + 300_000); // 5m
-    const filter = { type: workflow.type, key: workflow.key };
-    let update = { status: "processing", timeoutAt };
-    await this.workflows.updateOne(filter, update);
-    const wc = new WorkflowContext(workflow.type, workflow.key, this.now);
-
-    try {
-      await fn(wc, workflow.input);
-    } catch (err) {
-      const failure = JSON.stringify(err);
-
-      now = this.now();
-      const resumeAt = new Date(now.getTime() + 300_000); // 5m
-    }
-
-    throw new Error("todo");
+    await changeStream.close();
+    await this.client.close();
   }
 
-  /**
-   * It starts polling workflows from database.
-   * @param registry Map of type to function, used to select the correct function to run.
-   */
-  init(registry: Map<string, WorkflowFn>): Promise<void> {
-    throw new Error("todo");
+  async claim(): Promise<void> {
+    console.log("claiming workflow...");
+    const now = this.now();
+    const timeoutAt = new Date(now.getTime() + this.waitMs);
+
+    const filter = {
+      $or: [
+        {
+          status: "idle" as WorkflowStatus,
+        },
+        {
+          status: "running" as WorkflowStatus,
+          timeoutAt: { $lt: now },
+        },
+        {
+          status: "failed" as WorkflowStatus,
+          timeoutAt: { $lt: now },
+          failures: { $lt: this.maxFailures },
+        },
+      ],
+    };
+
+    const update = {
+      $set: {
+        status: "running" as WorkflowStatus,
+        timeoutAt,
+      },
+    };
+
+    const workflow = await this.workflows.findOneAndUpdate(filter, update, {
+      returnDocument: ReturnDocument.AFTER,
+    });
+
+    if (!workflow) {
+      return;
+    }
+
+    console.log(JSON.stringify(workflow, null, 2) + `\n ${this.now()}`);
+
+    const timeout: Timeout = { createdAt: now };
+    await this.timeouts.insertOne(timeout);
   }
 
-  /**
-   * It picks a ready-to-run workflow from the database.
-   * A workflow is ready-to-run if one of these conditions is true:
-   *  status=available
-   *  status=processing AND NOW>timeoutAt
-   *  status=failed AND failures<MAX_FAILURES AND NOW>resumeAt
-   * From these, the oldest one should be selected.
-   */
-  pick(): Promise<Workflow | undefined> {
+  async run(workflow: Workflow): Promise<void> {
+    console.log("running workflow...");
     throw new Error("todo");
   }
 }

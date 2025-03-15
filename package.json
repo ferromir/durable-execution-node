@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node --experimental-strip-types ./src/index.ts",
+    "start": "node --experimental-strip-types --watch ./src/index.ts",
     "format": "npx prettier . --write"
   },
   "author": "",
