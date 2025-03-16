@@ -176,6 +176,7 @@ export class Worker {
         },
         {
           $set: {
+            status: "sleeping",
             [`naps.${id}`]: sleepUntil,
             timeoutAt,
           },
