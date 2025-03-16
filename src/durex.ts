@@ -1,6 +1,11 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import goSleep from "sleep-promise";
 
+const DEFAULT_COLL_NAME = "workflows";
+const DEFAULT_TIMEOUT_INTERVAL_MS = 300_000;
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const DEFAULT_MAX_FAILURES = 3;
+
 type Status =
   | "idle"
   | "running"
@@ -8,6 +13,13 @@ type Status =
   | "failed"
   | "finished"
   | "aborted";
+
+const IDLE: Status = "idle";
+const RUNNING: Status = "running";
+const SLEEPING: Status = "sleeping";
+const FAILED: Status = "failed";
+const FINISHED: Status = "finished";
+const ABORTED: Status = "aborted";
 
 interface Workflow {
   id: string;
@@ -43,14 +55,14 @@ export class Worker {
     mongoUrl: string,
     now: () => Date,
     functions: Map<string, WorkflowFn>,
-    maxFailures: number,
-    timeoutIntervalMs: number,
-    pollIntervalMs: number,
+    maxFailures: number = DEFAULT_MAX_FAILURES,
+    timeoutIntervalMs: number = DEFAULT_TIMEOUT_INTERVAL_MS,
+    pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS,
   ) {
     this.now = now;
     this.client = new MongoClient(mongoUrl);
-    this.db = this.client.db("durex");
-    this.workflows = this.db.collection("workflows");
+    this.db = this.client.db();
+    this.workflows = this.db.collection(DEFAULT_COLL_NAME);
     this.functions = functions;
     this.maxFailures = maxFailures;
     this.timeoutIntervalMs = timeoutIntervalMs;
@@ -66,7 +78,7 @@ export class Worker {
       id,
       functionName,
       input,
-      status: "idle",
+      status: IDLE,
     };
 
     await this.workflows.insertOne(workflow);
@@ -98,18 +110,18 @@ export class Worker {
     const filter = {
       $or: [
         {
-          status: "idle" as Status,
+          status: IDLE,
         },
         {
-          status: "running" as Status,
+          status: RUNNING,
           timeoutAt: { $lt: now },
         },
         {
-          status: "sleeping" as Status,
+          status: SLEEPING,
           timeoutAt: { $lt: now },
         },
         {
-          status: "failed" as Status,
+          status: FAILED,
           timeoutAt: { $lt: now },
         },
       ],
@@ -117,7 +129,7 @@ export class Worker {
 
     const update = {
       $set: {
-        status: "running" as Status,
+        status: RUNNING,
         timeoutAt,
       },
     };
@@ -139,12 +151,9 @@ export class Worker {
       }
 
       const output = await fn();
-
-      await this.workflows.updateOne(
-        { id: workflowId },
-        { $set: { [`actions.${id}`]: output } },
-      );
-
+      const filter = { id: workflow.id };
+      const update = { $set: { [`actions.${id}`]: output } };
+      await this.workflows.updateOne(filter, update);
       return output;
     };
 
@@ -169,20 +178,17 @@ export class Worker {
 
       const sleepUntil = new Date(now.getTime() + ms);
       const timeoutAt = new Date(sleepUntil.getTime() + this.timeoutIntervalMs);
+      const filter = { id: workflow.id };
 
-      await this.workflows.updateOne(
-        {
-          id: workflowId,
+      const update = {
+        $set: {
+          status: SLEEPING,
+          [`naps.${id}`]: sleepUntil,
+          timeoutAt,
         },
-        {
-          $set: {
-            status: "sleeping",
-            [`naps.${id}`]: sleepUntil,
-            timeoutAt,
-          },
-        },
-      );
+      };
 
+      await this.workflows.updateOne(filter, update);
       await goSleep(ms);
     };
 
@@ -206,6 +212,9 @@ export class Worker {
 
     try {
       await fn(wc);
+      const filter = { id: workflow.id };
+      const update = { $set: { status: FINISHED } };
+      await this.workflows.updateOne(filter, update);
     } catch (err) {
       console.error(err);
       let lastError = "";
@@ -217,23 +226,21 @@ export class Worker {
       }
 
       const failures = (workflow.failures || 0) + 1;
-      const status: Status = failures < this.maxFailures ? "failed" : "aborted";
+      const status: Status = failures < this.maxFailures ? FAILED : ABORTED;
       const now = this.now();
       const timeoutAt = new Date(now.getTime() + this.timeoutIntervalMs);
+      const filter = { id: workflow.id };
 
-      await this.workflows.updateOne(
-        {
-          id: workflow.id,
+      const update = {
+        $set: {
+          status,
+          timeoutAt,
+          failures,
+          lastError,
         },
-        {
-          $set: {
-            status,
-            timeoutAt,
-            failures,
-            lastError,
-          },
-        },
-      );
+      };
+
+      await this.workflows.updateOne(filter, update);
     }
   }
 }
