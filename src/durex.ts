@@ -34,12 +34,12 @@ interface Workflow {
 }
 
 export interface WorkflowContext {
-  input: unknown;
   act<T>(id: string, fn: () => Promise<T>): Promise<T>;
   sleep(id: string, ms: number): Promise<void>;
+  start<T>(id: string, functionName: string, input: T): Promise<void>;
 }
 
-type WorkflowFn = (wc: WorkflowContext) => Promise<void>;
+type WorkflowFn = (wc: WorkflowContext, input: unknown) => Promise<unknown>;
 
 export class Worker {
   now: () => Date;
@@ -67,13 +67,12 @@ export class Worker {
     this.maxFailures = maxFailures;
     this.timeoutIntervalMs = timeoutIntervalMs;
     this.pollIntervalMs = pollIntervalMs;
+    this.workflows.createIndex({ id: 1 }, { unique: true });
+    this.workflows.createIndex({ status: 1 });
+    this.workflows.createIndex({ status: 1, timeoutAt: 1 });
   }
 
-  async create(
-    id: string,
-    functionName: string,
-    input: unknown,
-  ): Promise<void> {
+  async start<T>(id: string, functionName: string, input: T): Promise<void> {
     const workflow: Workflow = {
       id,
       functionName,
@@ -84,11 +83,7 @@ export class Worker {
     await this.workflows.insertOne(workflow);
   }
 
-  async init(): Promise<void> {
-    this.workflows.createIndex({ id: 1 }, { unique: true });
-    this.workflows.createIndex({ status: 1 });
-    this.workflows.createIndex({ status: 1, timeoutAt: 1 });
-
+  async poll(): Promise<void> {
     while (true) {
       const workflowId = await this.claim();
 
@@ -199,9 +194,9 @@ export class Worker {
     }
 
     const wc: WorkflowContext = {
-      input: workflow.input,
       act,
       sleep,
+      start: this.start,
     };
 
     const fn = this.functions.get(workflow.functionName);
@@ -211,7 +206,7 @@ export class Worker {
     }
 
     try {
-      await fn(wc);
+      await fn(wc, workflow.input);
       const filter = { id: workflow.id };
       const update = { $set: { status: FINISHED } };
       await this.workflows.updateOne(filter, update);
