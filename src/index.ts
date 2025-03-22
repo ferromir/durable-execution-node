@@ -3,7 +3,7 @@ import { PaymentApi } from "./payment-api.ts";
 import { AccountRepo } from "./account-repo.ts";
 import { InvoiceRepo } from "./invoice-repo.ts";
 import { InvoiceService } from "./invoice-service.ts";
-import { createClient } from "lidex";
+import { makeClient } from "lidex";
 
 const app = express();
 app.use(express.json());
@@ -12,17 +12,36 @@ const accountRepo = new AccountRepo();
 const invoiceRepo = new InvoiceRepo();
 const paymentApi = new PaymentApi();
 const invoiceService = new InvoiceService(accountRepo, invoiceRepo, paymentApi);
-const functions = new Map();
+const handlers = new Map();
 
-functions.set(
+handlers.set(
   "collect-payment",
   invoiceService.collectPayment.bind(invoiceService),
 );
 
-const client = await createClient({
-  functions,
+const client = await makeClient({
+  handlers,
   mongoUrl: "mongodb://localhost:27017/lidex?directConnection=true",
-  timeoutIntervalMs: 10_000,
+  now: () => new Date(),
+});
+
+app.post("/invoices/collect-all", async (req, res) => {
+  const pool: Promise<boolean>[] = [];
+
+  for (let i = 0; i < 100_000; i++) {
+    const invoiceId = `invoice-${i}`;
+
+    pool.push(
+      client.start(
+        `collect-payment-${invoiceId}`,
+        "collect-payment",
+        invoiceId,
+      ),
+    );
+  }
+
+  await Promise.all(pool);
+  res.send();
 });
 
 app.post("/invoices/:invoiceId/collect", async (req, res) => {
@@ -37,8 +56,16 @@ app.post("/invoices/:invoiceId/collect", async (req, res) => {
   res.send();
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`durex app listening on port ${port}`);
 });
 
-await client.poll();
+let stop = false;
+
+process.on("SIGINT", () => {
+  stop = true;
+  server.close();
+  process.exit();
+});
+
+await client.poll(() => stop);

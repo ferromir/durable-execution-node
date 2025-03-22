@@ -8,8 +8,6 @@ export interface Invoice {
 
 export class InvoiceRepo {
   find(id: string): Promise<Invoice | undefined> {
-    console.log("find invoice", id);
-
     return Promise.resolve({
       id,
       status: "not-paid",
@@ -20,7 +18,6 @@ export class InvoiceRepo {
   }
 
   markAsPaid(id: string): Promise<void> {
-    console.log("mark invoice as paid", id);
     return Promise.resolve();
   }
 }

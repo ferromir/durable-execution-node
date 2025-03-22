@@ -2,6 +2,7 @@ import { AccountRepo } from "./account-repo.ts";
 import { InvoiceRepo } from "./invoice-repo.ts";
 import { PaymentApi } from "./payment-api.ts";
 import type { Context } from "lidex";
+import pino from "pino";
 
 export class InvoiceService {
   accountRepo: AccountRepo;
@@ -18,40 +19,39 @@ export class InvoiceService {
     this.paymentApi = paymentApi;
   }
 
+  // This worflow simulates collecting a payment for a given invoice
   async collectPayment(ctx: Context, invoiceId: string): Promise<void> {
-    console.log("warming up...", invoiceId);
-    await ctx.sleep("warmup", 10_000);
+    const log = pino();
 
-    console.log("collecting payment for invoice...", invoiceId);
-
-    const invoice = await ctx.act("find-invoice", async () => {
-      console.log("executing find-invoice...");
+    const invoice = await ctx.step("find-invoice", async () => {
+      log.info(`${invoiceId} - finding invoice`);
       return await this.invoiceRepo.find(invoiceId);
     });
 
     if (!invoice) {
-      console.log("invoice not found", invoiceId);
+      log.info(`${invoiceId} - invoice not found`);
       return;
     }
 
     if (invoice.status === "paid") {
-      console.log("invoice already paid", invoiceId);
+      log.info(`${invoiceId} - invoice already paid`);
       return;
     }
 
-    const account = await ctx.act("find-account", async () => {
-      console.log("executing find-account...");
+    const account = await ctx.step("find-account", async () => {
+      log.info(`${invoiceId} - finding account`);
       return await this.accountRepo.find(invoice.accountId);
     });
 
     if (!account) {
-      console.log("account not found", invoiceId);
+      log.info(`${invoiceId} - account not found`);
       return;
     }
 
+    // Retry up to 10 times
     for (let i = 0; i < 10; i++) {
-      const success = await ctx.act(`capture-payment-${i}`, async () => {
-        console.log(`executing capture-payment-${i}...`);
+      const success = await ctx.step(`capture-payment-${i}`, async () => {
+        log.info(`${invoiceId} - capturing payment ${i}`);
         return await this.paymentApi.capture(
           account.paymentToken,
           invoice.amount,
@@ -59,23 +59,22 @@ export class InvoiceService {
       });
 
       if (success) {
-        await ctx.act("mark-invoice-as-paid", async () => {
+        await ctx.step("mark-invoice-as-paid", async () => {
+          log.info(`${invoiceId} - mark invoice as paid`);
           await this.invoiceRepo.markAsPaid(invoice.id);
         });
 
-        console.log("invoice paid", invoiceId);
         return;
       }
 
-      console.log("capture failed, retry after pause...", invoiceId);
-      await ctx.sleep(`sleep-${i}`, 20_000);
+      log.info(`${invoiceId} - sleeping ${i}`);
+      // add jitter so wake-up time is more distribured among workflows
+      await ctx.sleep(`sleep-${i}`, 10_000 + Math.random() * 1_000);
     }
 
-    await ctx.act("block-account", async () => {
-      console.log("executing block-account...");
+    await ctx.step("block-account", async () => {
+      log.info(`${invoiceId} - blocking account`);
       await this.accountRepo.block(account.id);
     });
-
-    console.log("account blocked", invoiceId);
   }
 }

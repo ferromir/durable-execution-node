@@ -1,6 +1,6 @@
 export class PaymentApi {
+  // Only 10% of changes of a successful capture, for the sake of the test
   capture(paymentToken: string, amount: number): Promise<boolean> {
-    console.log("capture payment", paymentToken, amount);
-    return Promise.resolve(Math.random() < 0.25);
+    return Promise.resolve(Math.random() < 0.1);
   }
 }
