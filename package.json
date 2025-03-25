@@ -12,7 +12,8 @@
   "description": "",
   "dependencies": {
     "express": "^4.21.2",
-    "lidex": "^1.0.5",
+    "lidex": "^2.0.2",
+    "lidex-mongo": "^1.0.1",
     "mongodb": "^6.14.2",
     "pino": "^9.6.0",
     "sleep-promise": "^9.1.0",
