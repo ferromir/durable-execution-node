@@ -27,10 +27,10 @@ const persistence = new MongoPersistence(
 await persistence.init();
 const client = await makeClient({ handlers, persistence });
 
-app.post("/collect", async (req, res) => {
+app.post("/invoices/collect-all", async (req, res) => {
   const pool: Promise<boolean>[] = [];
 
-  for (let i = 0; i < 100_000; i++) {
+  for (let i = 100_000; i < 300_000; i++) {
     const invoiceId = `invoice-${i}`;
 
     pool.push(
@@ -43,6 +43,18 @@ app.post("/collect", async (req, res) => {
   }
 
   await Promise.all(pool);
+  res.send();
+});
+
+app.post("/invoices/:invoiceId/collect", async (req, res) => {
+  const invoiceId = req.params.invoiceId;
+
+  await client.start(
+    `collect-payment-${invoiceId}`,
+    "collect-payment",
+    invoiceId,
+  );
+
   res.send();
 });
 

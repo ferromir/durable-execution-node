@@ -67,9 +67,12 @@ export class InvoiceService {
         return;
       }
 
-      log.info(`${invoiceId} - sleeping ${i}`);
-      // add jitter so wake-up time is more distribured among workflows
-      await ctx.sleep(`sleep-${i}`, 10_000 + Math.random() * 1_000);
+      await ctx.step(`sleep-${i}`, async () => {
+        log.info(`${invoiceId} - sleeping ${i}`);
+
+        // add jitter so wake-up time is more distribured among workflows
+        await ctx.sleep(`sleep-${i}`, 10_000 + Math.random() * 1_000);
+      });
     }
 
     await ctx.step("block-account", async () => {
