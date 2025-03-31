@@ -24,7 +24,6 @@ const persistence = new MongoPersistence(
   "mongodb://localhost:27017/lidex?directConnection=true",
 );
 
-await persistence.init();
 const client = await makeClient({ handlers, persistence });
 
 app.post("/invoices/collect-all", async (req, res) => {
