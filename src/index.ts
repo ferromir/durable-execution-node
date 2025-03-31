@@ -1,4 +1,3 @@
-import express from "express";
 import { PaymentApi } from "./payment-api.ts";
 import { AccountRepo } from "./account-repo.ts";
 import { InvoiceRepo } from "./invoice-repo.ts";
@@ -6,9 +5,6 @@ import { InvoiceService } from "./invoice-service.ts";
 import { makeClient } from "lidex";
 import { MongoPersistence } from "lidex-mongo";
 
-const app = express();
-app.use(express.json());
-const port = 3000;
 const accountRepo = new AccountRepo();
 const invoiceRepo = new InvoiceRepo();
 const paymentApi = new PaymentApi();
@@ -26,47 +22,23 @@ const persistence = new MongoPersistence(
 
 const client = await makeClient({ handlers, persistence });
 
-app.post("/invoices/collect-all", async (req, res) => {
-  const pool: Promise<boolean>[] = [];
-
-  for (let i = 100_000; i < 300_000; i++) {
+async function produceWorkflows(): Promise<void> {
+  for (let i = 0; i < 100_000; i++) {
     const invoiceId = `invoice-${i}`;
 
-    pool.push(
-      client.start(
-        `collect-payment-${invoiceId}`,
-        "collect-payment",
-        invoiceId,
-      ),
+    await client.start(
+      `collect-payment-${invoiceId}`,
+      "collect-payment",
+      invoiceId,
     );
   }
-
-  await Promise.all(pool);
-  res.send();
-});
-
-app.post("/invoices/:invoiceId/collect", async (req, res) => {
-  const invoiceId = req.params.invoiceId;
-
-  await client.start(
-    `collect-payment-${invoiceId}`,
-    "collect-payment",
-    invoiceId,
-  );
-
-  res.send();
-});
-
-const server = app.listen(port, () => {
-  console.log(`lidex example app listening on port ${port}`);
-});
+}
 
 let stop = false;
 
 process.on("SIGINT", () => {
   stop = true;
-  server.close();
   process.exit();
 });
 
-await client.poll(() => stop);
+await Promise.all([produceWorkflows(), client.poll(() => stop)]);
