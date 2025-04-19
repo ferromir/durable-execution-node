@@ -2,8 +2,8 @@ import { PaymentApi } from "./payment-api.ts";
 import { AccountRepo } from "./account-repo.ts";
 import { InvoiceRepo } from "./invoice-repo.ts";
 import { InvoiceService } from "./invoice-service.ts";
-import { makeClient } from "lidex";
-import { MongoPersistence } from "lidex-mongo";
+import { makeClient, makeWorker } from "lidex";
+import { makeMongoPersistence } from "lidex-mongo";
 
 const accountRepo = new AccountRepo();
 const invoiceRepo = new InvoiceRepo();
@@ -16,11 +16,12 @@ handlers.set(
   invoiceService.collectPayment.bind(invoiceService),
 );
 
-const persistence = new MongoPersistence(
+const persistence = makeMongoPersistence(
   "mongodb://localhost:27017/lidex?directConnection=true",
 );
 
-const client = await makeClient({ handlers, persistence });
+const client = await makeClient({ persistence });
+const worker = await makeWorker({ persistence, handlers });
 
 async function produceWorkflows(): Promise<void> {
   for (let i = 0; i < 100_000; i++) {
@@ -41,4 +42,4 @@ process.on("SIGINT", () => {
   process.exit();
 });
 
-await Promise.all([produceWorkflows(), client.poll(() => stop)]);
+await Promise.all([produceWorkflows(), worker.poll(() => stop)]);

@@ -67,8 +67,7 @@ export class InvoiceService {
         return;
       }
 
-      // add jitter so wake-up time is more distribured among workflows
-      await ctx.sleep(`sleep-${i}`, 10_000 + Math.random() * 1_000);
+      await ctx.sleep(`sleep-${i}`, 60_000);
     }
 
     await ctx.step("block-account", async () => {
