@@ -20,6 +20,7 @@ const persistence = makeMongoPersistence(
   "mongodb://localhost:27017/lidex?directConnection=true",
 );
 
+await persistence.init();
 const client = await makeClient({ persistence });
 const worker = await makeWorker({ persistence, handlers });
 
@@ -37,8 +38,9 @@ async function produceWorkflows(): Promise<void> {
 
 let stop = false;
 
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   stop = true;
+  await persistence.terminate();
   process.exit();
 });
 
