@@ -1,22 +1,24 @@
 import { makeClient } from "lidex";
 import { makeMongoPersistence } from "lidex-mongo";
 
-const persistence = makeMongoPersistence(
-  "mongodb://localhost:27017/lidex?directConnection=true",
-);
-
+const url = "mongodb://localhost:27017/lidex?directConnection=true";
+const persistence = makeMongoPersistence(url);
 await persistence.init();
-const client = await makeClient({ persistence });
+const client = await makeClient(persistence);
+const skip = Number(process.argv[2]) || 0;
+const limit = Number(process.argv[3]) || 1_000_000;
 
 async function produceWorkflows(): Promise<void> {
-  for (let i = 0; i < 100_000; i++) {
+  for (let i = skip; i < limit; i++) {
     const invoiceId = `invoice-${i}`;
 
-    await client.start(
+    const created = await client.start(
       `collect-payment-${invoiceId}`,
       "collect-payment",
       invoiceId,
     );
+
+    console.log(`collect-payment-${invoiceId}: ${created}`);
   }
 }
 

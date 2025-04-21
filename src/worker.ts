@@ -16,12 +16,10 @@ handlers.set(
   invoiceService.collectPayment.bind(invoiceService),
 );
 
-const persistence = makeMongoPersistence(
-  "mongodb://localhost:27017/lidex?directConnection=true",
-);
-
+const url = "mongodb://localhost:27017/lidex?directConnection=true";
+const persistence = makeMongoPersistence(url);
 await persistence.init();
-const worker = await makeWorker({ persistence, handlers });
+const worker = await makeWorker(persistence, handlers);
 let stop = false;
 
 process.on("SIGINT", async () => {
