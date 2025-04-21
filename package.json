@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "main": "./src/index.ts",
   "scripts": {
-    "start": "node --experimental-strip-types --watch ./src/index.ts",
+    "start-client": "node --experimental-strip-types ./src/client.ts",
+    "start-worker": "node --experimental-strip-types ./src/worker.ts",
     "format": "npx prettier . --write"
   },
   "author": "",
